@@ -1,7 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Hls from "hls.js";
-import { Copy, Link, LogOut, PlayCircle, RefreshCw, Shield, Upload } from "lucide-react";
+import {
+  Copy,
+  Link,
+  LogOut,
+  PlayCircle,
+  RefreshCw,
+  RotateCw,
+  Save,
+  Search,
+  Shield,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import "./styles.css";
 
 const API_BASE =
@@ -29,6 +41,14 @@ function Player({ url }) {
   return <video ref={videoRef} controls className="player" />;
 }
 
+function titleFromFilename(name) {
+  return name
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [email, setEmail] = useState("admin@example.com");
@@ -37,13 +57,38 @@ function App() {
   const [rules, setRules] = useState([]);
   const [title, setTitle] = useState("");
   const [file, setFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadState, setUploadState] = useState("Idle");
+  const [isUploading, setIsUploading] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editPublic, setEditPublic] = useState(false);
   const [domain, setDomain] = useState("");
   const [ruleType, setRuleType] = useState("allow");
   const [generatedLink, setGeneratedLink] = useState("");
   const [message, setMessage] = useState("");
+  const fileInputRef = useRef(null);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const stats = useMemo(
+    () => ({
+      total: videos.length,
+      ready: videos.filter((video) => video.status === "ready").length,
+      processing: videos.filter((video) => ["uploaded", "processing"].includes(video.status)).length,
+      failed: videos.filter((video) => video.status === "failed").length,
+    }),
+    [videos],
+  );
+  const filteredVideos = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return videos;
+    return videos.filter((video) =>
+      [video.title, video.original_filename, video.status].some((value) =>
+        String(value || "").toLowerCase().includes(needle),
+      ),
+    );
+  }, [search, videos]);
 
   async function request(path, options = {}) {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -92,11 +137,66 @@ function App() {
     const body = new FormData();
     body.set("title", title);
     body.set("file", file);
-    await request("/videos", { method: "POST", body });
-    setTitle("");
-    setFile(null);
-    setMessage("Upload queued for encoding");
-    await load();
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadState("Preparing upload");
+
+    try {
+      const uploaded = await uploadWithProgress(body);
+      setTitle("");
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setUploadProgress(100);
+      setUploadState(uploaded.status === "ready" ? "Ready" : "Encoding queued");
+      setMessage("Upload received. Encoding status is visible in the library.");
+      await load();
+    } catch (error) {
+      setUploadState("Failed");
+      setMessage(error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  function uploadWithProgress(body) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_BASE}/videos`);
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) {
+          setUploadState("Uploading");
+          return;
+        }
+        const percent = Math.round((event.loaded / event.total) * 100);
+        setUploadProgress(percent);
+        setUploadState(percent >= 100 ? "Finalizing upload" : "Uploading");
+      };
+      xhr.onload = () => {
+        let data = null;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch {
+          data = null;
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+        } else {
+          reject(new Error(data?.detail || "Upload failed"));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Network error while uploading"));
+      xhr.send(body);
+    });
+  }
+
+  function handleFileChange(nextFile) {
+    setFile(nextFile);
+    setUploadProgress(0);
+    setUploadState(nextFile ? "Ready to upload" : "Idle");
+    if (nextFile) {
+      setTitle(titleFromFilename(nextFile.name));
+    }
   }
 
   async function addRule(event) {
@@ -131,9 +231,56 @@ function App() {
     setMessage("Playback link copied");
   }
 
+  async function saveVideoDetails() {
+    if (!selected) return;
+    const updated = await request(`/videos/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: editTitle, is_public: editPublic }),
+    });
+    setSelected(updated);
+    setGeneratedLink("");
+    setMessage("Video details saved");
+    await load();
+  }
+
+  async function reencodeSelected() {
+    if (!selected) return;
+    const updated = await request(`/videos/${selected.id}/reencode`, { method: "POST" });
+    setSelected(updated);
+    setGeneratedLink("");
+    setMessage("Re-encode queued");
+    await load();
+  }
+
+  async function deleteSelected() {
+    if (!selected) return;
+    const ok = window.confirm(`Delete "${selected.title}" and its encoded files?`);
+    if (!ok) return;
+    await request(`/videos/${selected.id}`, { method: "DELETE" });
+    setSelected(null);
+    setGeneratedLink("");
+    setMessage("Video deleted");
+    await load();
+  }
+
   useEffect(() => {
     load().catch((error) => setMessage(error.message));
   }, [token]);
+
+  useEffect(() => {
+    setEditTitle(selected?.title || "");
+    setEditPublic(Boolean(selected?.is_public));
+  }, [selected?.id, selected?.title, selected?.is_public]);
+
+  useEffect(() => {
+    const hasActiveVideo = videos.some((video) => ["uploaded", "processing"].includes(video.status));
+    if (!token || (!isUploading && !hasActiveVideo)) return undefined;
+    const interval = window.setInterval(() => {
+      load().catch(() => {});
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [token, isUploading, videos]);
 
   if (!token) {
     return (
@@ -170,13 +317,31 @@ function App() {
           {message && <span className="message">{message}</span>}
         </div>
 
+        <section className="stats">
+          <div><strong>{stats.total}</strong><span>Total</span></div>
+          <div><strong>{stats.ready}</strong><span>Ready</span></div>
+          <div><strong>{stats.processing}</strong><span>Processing</span></div>
+          <div><strong>{stats.failed}</strong><span>Failed</span></div>
+        </section>
+
         <div className="grid">
           <section className="panel">
             <h3><Upload size={18} /> Upload</h3>
             <form onSubmit={uploadVideo} className="stack">
               <input placeholder="Video title" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <input type="file" accept="video/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              <button type="submit">Upload and Encode</button>
+              <input ref={fileInputRef} type="file" accept="video/*" onChange={(e) => handleFileChange(e.target.files?.[0] || null)} />
+              <div className="upload-status">
+                <div className="upload-status-row">
+                  <span>{uploadState}</span>
+                  <strong>{uploadProgress}%</strong>
+                </div>
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+                </div>
+              </div>
+              <button type="submit" disabled={isUploading || !file || !title}>
+                {isUploading ? "Uploading..." : "Upload and Encode"}
+              </button>
             </form>
           </section>
 
@@ -197,15 +362,47 @@ function App() {
           </section>
 
           <section className="panel">
-            <h3>Library</h3>
+            <h3><Search size={18} /> Library</h3>
+            <input className="search-input" placeholder="Search videos" value={search} onChange={(event) => setSearch(event.target.value)} />
             <div className="video-list">
-              {videos.map((video) => (
-                <button key={video.id} className={`video-row ${selected?.id === video.id ? "active" : ""}`} onClick={() => setSelected(video)}>
-                  <span>{video.title}</span>
+              {filteredVideos.map((video) => (
+                <button key={video.id} className={`video-row ${selected?.id === video.id ? "active" : ""}`} onClick={() => { setSelected(video); setGeneratedLink(""); }}>
+                  <span>
+                    <b>{video.title}</b>
+                    <small>{video.original_filename}</small>
+                  </span>
                   <strong data-status={video.status}>{video.status}</strong>
                 </button>
               ))}
+              {!filteredVideos.length && <div className="empty small">No videos found.</div>}
             </div>
+          </section>
+
+          <section className="panel wide">
+            <h3>Manage Selected Video</h3>
+            {selected ? (
+              <div className="manage-grid">
+                <label>Title<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} /></label>
+                <label className="toggle-row">
+                  <input type="checkbox" checked={editPublic} onChange={(event) => setEditPublic(event.target.checked)} />
+                  Public
+                </label>
+                <dl className="details-list">
+                  <div><dt>Status</dt><dd data-status={selected.status}>{selected.status}</dd></div>
+                  <div><dt>Original</dt><dd>{selected.original_filename}</dd></div>
+                  <div><dt>Duration</dt><dd>{selected.duration_seconds ? `${selected.duration_seconds}s` : "Unknown"}</dd></div>
+                  <div><dt>Resolution</dt><dd>{selected.width && selected.height ? `${selected.width}x${selected.height}` : "Unknown"}</dd></div>
+                </dl>
+                {selected.error_message && <div className="error-box">{selected.error_message}</div>}
+                <div className="actions">
+                  <button type="button" onClick={saveVideoDetails}><Save size={18} /> Save</button>
+                  <button type="button" className="secondary" onClick={reencodeSelected}><RotateCw size={18} /> Re-encode</button>
+                  <button type="button" className="danger" onClick={deleteSelected}><Trash2 size={18} /> Delete</button>
+                </div>
+              </div>
+            ) : (
+              <div className="empty small">Select a video to manage it.</div>
+            )}
           </section>
 
           <section className="panel wide">

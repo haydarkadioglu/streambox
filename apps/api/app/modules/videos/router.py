@@ -42,6 +42,11 @@ class PlaybackLinkResponse(BaseModel):
     expires_in_seconds: int
 
 
+class VideoUpdateRequest(BaseModel):
+    title: str | None = None
+    is_public: bool | None = None
+
+
 def playback_url_for(video: Video) -> str:
     settings = get_settings()
     token = create_playback_token(video.id)
@@ -129,6 +134,28 @@ def get_video(
     return build_response(video)
 
 
+@router.patch("/{video_id}", response_model=VideoResponse)
+def update_video(
+    video_id: uuid.UUID,
+    payload: VideoUpdateRequest,
+    _user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> VideoResponse:
+    video = db.get(Video, str(video_id))
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if payload.title is not None:
+        clean_title = payload.title.strip()
+        if not clean_title:
+            raise HTTPException(status_code=400, detail="Title cannot be empty")
+        video.title = clean_title
+    if payload.is_public is not None:
+        video.is_public = payload.is_public
+    db.commit()
+    db.refresh(video)
+    return build_response(video)
+
+
 @router.post("/{video_id}/playback-link", response_model=PlaybackLinkResponse)
 def create_video_playback_link(
     video_id: uuid.UUID,
@@ -165,3 +192,22 @@ def reencode_video(
     encode_video.delay(str(video.id))
     db.refresh(video)
     return build_response(video)
+
+
+@router.delete("/{video_id}", status_code=204)
+def delete_video(
+    video_id: uuid.UUID,
+    _user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    video = db.get(Video, str(video_id))
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video.source_path:
+        Path(video.source_path).unlink(missing_ok=True)
+    if video.hls_path:
+        shutil.rmtree(video.hls_path, ignore_errors=True)
+    if video.thumbnail_path:
+        Path(video.thumbnail_path).unlink(missing_ok=True)
+    db.delete(video)
+    db.commit()
