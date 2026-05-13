@@ -4,7 +4,9 @@ import Hls from "hls.js";
 import { Copy, Link, LogOut, PlayCircle, RefreshCw, Shield, Upload } from "lucide-react";
 import "./styles.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000/api";
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (window.location.port === "5173" ? "http://localhost:8000/api" : `${window.location.origin}/api`);
 
 function Player({ url }) {
   const videoRef = useRef(null);

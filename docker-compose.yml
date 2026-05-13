@@ -59,14 +59,8 @@ services:
         condition: service_started
 
   web:
-    image: node:20-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev"
-    environment:
-      VITE_API_BASE: http://localhost:8080/api
-    volumes:
-      - ./apps/web:/app
-      - web_node_modules:/app/node_modules
+    build:
+      context: ./apps/web
     depends_on:
       - api
 
@@ -83,4 +77,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  web_node_modules:

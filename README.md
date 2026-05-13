@@ -88,6 +88,12 @@ http://localhost:5173
 
 ## VPS Notes
 
+Detailed VPS setup guide:
+
+```text
+docs/vps-setup.md
+```
+
 Before deploying, change these values in `.env`:
 
 ```text
