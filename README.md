@@ -1,6 +1,6 @@
-# Stream Control
+# StreamBox
 
-A local-first video streaming platform prototype with a Python backend, HLS encoding, signed playback URLs, and domain allow/block rules.
+A local-first video streaming platform with a Python backend, HLS encoding, signed playback URLs, and domain allow/block rules.
 
 ## Stack
 

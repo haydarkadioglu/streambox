@@ -1,7 +1,7 @@
 [project]
-name = "stream-platform-api"
+name = "streambox-api"
 version = "0.1.0"
-description = "FastAPI video streaming platform backend with HLS encoding"
+description = "FastAPI backend for StreamBox with HLS encoding"
 requires-python = ">=3.11"
 dependencies = [
   "alembic>=1.13.0",

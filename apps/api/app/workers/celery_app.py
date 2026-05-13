@@ -5,7 +5,7 @@ from app.core.config import get_settings
 settings = get_settings()
 
 celery_app = Celery(
-    "stream_platform",
+    "streambox",
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=["app.workers.encoding"],

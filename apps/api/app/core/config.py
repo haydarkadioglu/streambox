@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Stream Platform"
+    app_name: str = "StreamBox"
     environment: str = "local"
     database_url: str = "sqlite:///./stream-local.db"
     redis_url: str = "memory://"

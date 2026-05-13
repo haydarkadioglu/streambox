@@ -137,7 +137,7 @@ function App() {
     return (
       <main className="login-shell">
         <form className="login-panel" onSubmit={login}>
-          <h1>Stream Control</h1>
+          <h1>StreamBox</h1>
           <p>Manage uploads, encoding, playback links, and domain access.</p>
           <label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} /></label>
           <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
@@ -152,7 +152,7 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div>
-          <h1>Stream Control</h1>
+          <h1>StreamBox</h1>
           <span className="muted">Python HLS platform</span>
         </div>
         <button className="ghost" onClick={() => load()}><RefreshCw size={18} /> Refresh</button>
