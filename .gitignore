@@ -11,3 +11,4 @@ storage/thumbs/*
 !storage/uploads/.gitkeep
 !storage/hls/.gitkeep
 !storage/thumbs/.gitkeep
+*.db
