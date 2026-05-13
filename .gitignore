@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.env
+.env.local
+.venv/
+node_modules/
+dist/
+storage/uploads/*
+storage/hls/*
+storage/thumbs/*
+!storage/uploads/.gitkeep
+!storage/hls/.gitkeep
+!storage/thumbs/.gitkeep
