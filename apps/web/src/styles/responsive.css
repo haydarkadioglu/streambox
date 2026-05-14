@@ -1,0 +1,7 @@
+@media (max-width: 860px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .grid, .domain-form, .link-tools, .stats, .details-list, .health-grid { grid-template-columns: 1fr; }
+  .content { padding: 18px; }
+}
+
